@@ -21,4 +21,8 @@
 <div id="status">Mulai dari area loading. Ikuti jalan kerikil menuju disposal.</div>
 </main>
 <script type="module" src="app.js"></script>
-</body></html>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js");
+}
+</script></body></html>
