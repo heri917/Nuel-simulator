@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#101112">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hauling Truck">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.svg">
+<link rel="stylesheet" href="style.css"><title>Hauling Truck Simulator</title>
+</head>
+<body>
+<div id="loading">HAULING TRUCK<br><small>DT030-0204 · 3D SIMULATOR</small></div>
+<main>
+<header class="bar"><div><b>HAULING TRUCK SIMULATOR</b><small>Volvo FMX 440 · Trinton 8×4 · DT030-0204</small></div><div class="readout"><span><b id="speed">0</b> km/j</span><span>RIT <b id="trip">0</b></span></div></header>
+<div id="viewport"><canvas id="game"></canvas><div id="dumpLabel">DISPOSAL</div></div>
+<div class="controls">
+<button id="left">◀</button><button id="gas" class="gas">▲<small>GAS</small></button><button id="right">▶</button>
+<button id="brake">▼ REM</button><button id="dump" disabled>DUMP</button><button id="reset">↻ RESET</button>
+</div>
+<div id="status">Mulai dari area loading. Ikuti jalan kerikil menuju disposal.</div>
+</main>
+<script type="module" src="app.js"></script>
+</body></html>
