@@ -13,8 +13,6 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 #loading.hide{opacity:0;visibility:hidden;pointer-events:none}
 .loadWrap{width:min(820px,82vw);text-align:center}
 .loadLogo{width:min(460px,48vw);max-height:34vh;height:auto;aspect-ratio:auto;object-fit:contain;border-radius:18px;display:block;margin:0 auto 22px;box-shadow:0 18px 70px rgba(0,0,0,.65),0 0 0 2px rgba(255,198,30,.25)}
-.loadTitle{font-weight:900;letter-spacing:5px;font-size:clamp(18px,3vw,30px);margin-bottom:5px}
-.loadSub{font-size:12px;letter-spacing:3px;color:#9ba2a6;margin-bottom:22px}
 .loaderTrack{position:relative;height:34px;border:2px solid #34393d;border-radius:18px;background:#111416;overflow:hidden;box-shadow:inset 0 0 18px rgba(0,0,0,.7)}
 .loaderFill{position:absolute;left:0;top:0;height:100%;width:0;background:repeating-linear-gradient(135deg,#f6c21a 0 16px,#111416 16px 28px);transition:width .12s linear}
 .tire{position:absolute;top:50%;left:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:radial-gradient(circle,#777 0 16%,#222 17% 36%,#0a0a0a 37% 66%,#555 67% 72%,#0b0b0b 73%);border:2px solid #0a0a0a;box-shadow:0 4px 10px rgba(0,0,0,.65);z-index:3}
@@ -22,9 +20,6 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .loadPct{margin-top:11px;font-size:18px;font-weight:900;color:#f6c21a;letter-spacing:2px}
 #hud{position:absolute;inset:0;z-index:20;pointer-events:none}
 .panel{position:absolute;background:rgba(9,11,13,.78);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 35px rgba(0,0,0,.25);backdrop-filter:blur(8px);border-radius:17px}
-#brand{left:max(14px,env(safe-area-inset-left));top:max(14px,env(safe-area-inset-top));padding:12px 17px}
-#brand b{font-size:clamp(16px,2.2vw,25px);letter-spacing:1px}
-#brand small{display:block;color:#b9bec2;margin-top:4px;letter-spacing:1px}
 #speed{right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));padding:11px 18px;text-align:right;min-width:108px}
 #speed .n{font-size:clamp(26px,4vw,43px);font-weight:900;line-height:.9}
 #speed .u{font-size:11px;color:#aeb4b8;letter-spacing:2px}
@@ -43,10 +38,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .ctrl.active{transform:scale(.97);filter:brightness(1.22)}
 #steer{position:absolute;left:max(155px,18vw);bottom:max(22px,env(safe-area-inset-bottom));width:170px;height:74px;display:flex;gap:10px;pointer-events:auto}
 .steer{flex:1;height:74px;border-radius:22px;background:rgba(15,18,20,.86);border:1px solid rgba(255,255,255,.17);font-size:31px;font-weight:900;touch-action:none}
-#hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:9px 18px;border-radius:15px;background:rgba(9,11,13,.7);color:#e7e9ea;font-size:14px;opacity:.85;transition:opacity .5s}
-#dumpState{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:150px;padding:8px 12px;border-radius:12px;background:rgba(9,11,13,.65);font-size:11px;letter-spacing:1px;color:#c9ced1;display:none}
 @media (max-width:760px){
- #brand{padding:9px 13px}.ctrl{width:65px;height:65px}.ctrl.gas{height:94px}.ctrl.brake{height:78px}.ctrl.dump,.ctrl.reset{height:65px}
+ .ctrl{width:65px;height:65px}.ctrl.gas{height:94px}.ctrl.brake{height:78px}.ctrl.dump,.ctrl.reset{height:65px}
  #steer{left:145px;width:150px;height:65px}.steer{height:65px}
  #rpmBox{top:83px}
 }

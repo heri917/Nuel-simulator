@@ -15,7 +15,7 @@ function animateLoading(now){
   tire.style.transform=`rotate(${p*1450}deg)`;
   pct.textContent=Math.round(p*100)+"%";
   if(p<1) requestAnimationFrame(animateLoading);
-  else setTimeout(()=>loading.classList.add("hide"),180);
+  else setTimeout(()=>loading.classList.add("hide"),120);
 }
 requestAnimationFrame(animateLoading);
 
@@ -23,8 +23,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9ca8a0);
 scene.fog = new THREE.Fog(0x9ca8a0, 150, 850);
 
-const viewW=Math.max(innerWidth,innerHeight), viewH=Math.min(innerWidth,innerHeight);
-const camera = new THREE.PerspectiveCamera(62,viewW/viewH,.1,1400);
+let viewW=Math.max(innerWidth,innerHeight), viewH=Math.min(innerWidth,innerHeight);
+const camera = new THREE.PerspectiveCamera(58,viewW/viewH,.1,1400);
 const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
 renderer.setSize(viewW,viewH,false);
@@ -176,6 +176,7 @@ for(let i=0;i<10;i++){
 // Truck
 const truck=new THREE.Group();world.add(truck);
 const visual=new THREE.Group();truck.add(visual);
+
 const cab=new THREE.Group();visual.add(cab);
 box(5.7,4.8,5.1,mWhite,0,5.0,2.3,cab);
 box(5.45,2.0,5.25,mBlack,0,3.65,2.2,cab);
@@ -203,7 +204,27 @@ for(const x of [-2.9,2.9]){
  box(.18,1.0,.22,mBlack,x,5.15,1.0,cab);
  cyl(.13,.7,mBlack,x,5.25,.7,Math.PI/2,0,cab);
 }
+
 const chassis=box(5.3,.65,12.2,mBlack,0,2.25,-3.2,visual);
+
+// 204 is painted on the dump-body side as part of the livery.
+function makeUnitNumberTexture(){
+ const c=document.createElement("canvas"); c.width=512; c.height=180;
+ const g=c.getContext("2d"); g.clearRect(0,0,c.width,c.height);
+ g.textAlign="center"; g.textBaseline="middle";
+ g.font="900 138px Arial";
+ g.lineWidth=18; g.strokeStyle="#111";
+ g.strokeText("204",256,92);
+ g.fillStyle="#f2c218"; g.fillText("204",256,92);
+ return new THREE.CanvasTexture(c);
+}
+const unitMat=new THREE.MeshBasicMaterial({map:makeUnitNumberTexture(),transparent:true});
+const unitPlaneR=new THREE.Mesh(new THREE.PlaneGeometry(2.5,.88),unitMat);
+unitPlaneR.position.set(2.73,5.15,-4.25); unitPlaneR.rotation.y=-Math.PI/2; visual.add(unitPlaneR);
+const unitPlaneL=unitPlaneR.clone();
+unitPlaneL.material=unitMat.clone();
+unitPlaneL.position.x=-2.73; unitPlaneL.rotation.y=Math.PI/2; visual.add(unitPlaneL);
+
 
 // AlamTri side logo planes
 const texLoader=new THREE.TextureLoader();
@@ -275,7 +296,7 @@ truck.rotation.y=Math.atan2(startTan.x,startTan.z);
 let baseHeading=truck.rotation.y;
 
 const state={speed:0,steer:0,gas:false,brake:false,reverse:false,dumping:false,gear:1,dumpT:0,roll:0,camYaw:0,camPitch:0.22,camDist:25};
-let targetCamYaw=0,targetCamPitch=.22,targetCamDist=25;
+let targetCamYaw=0,targetCamPitch=.18,targetCamDist=21;
 let manualCameraUntil=0;
 
 function bindHold(id,key){
@@ -351,7 +372,7 @@ function resetTruck(){
  truck.rotation.y=Math.atan2(t.x,t.z);baseHeading=truck.rotation.y;
  state.speed=0;state.steer=0;state.roll=0;state.reverse=false;state.gear=1;state.dumping=false;state.dumpT=0;
  dumpPivot.rotation.x=0;
- targetCamYaw=0;targetCamPitch=.22;targetCamDist=25;manualCameraUntil=0;reverseBtn.classList.remove("active");
+ targetCamYaw=0;targetCamPitch=.18;targetCamDist=21;manualCameraUntil=0;reverseBtn.classList.remove("active");
 }
 
 function roadInfo(pos){
@@ -380,8 +401,15 @@ function ensureAudio(){
  reverseOsc=audioCtx.createOscillator();reverseOsc.type="square";reverseOsc.frequency.value=930;reverseGain=audioCtx.createGain();reverseGain.gain.value=.0001;reverseOsc.connect(reverseGain).connect(compressor);reverseOsc.start();
 }
 function gearShift(oldG,newG){
- if(!audioCtx||oldG===newG)return;const now=audioCtx.currentTime;
- gearOsc.frequency.setTargetAtTime(newG>oldG?66:56,now,.008);gearGain.gain.cancelScheduledValues(now);gearGain.gain.setValueAtTime(.0001,now);gearGain.gain.exponentialRampToValueAtTime(.035,now+.015);gearGain.gain.exponentialRampToValueAtTime(.0001,now+.11);
+ if(!audioCtx||oldG===newG)return;
+ const now=audioCtx.currentTime;
+ // Mechanical "clunk" plus a brief RPM dip, like a loaded manual/AMT truck.
+ gearOsc.frequency.setTargetAtTime(newG>oldG?66:56,now,.008);
+ gearGain.gain.cancelScheduledValues(now);
+ gearGain.gain.setValueAtTime(.0001,now);
+ gearGain.gain.exponentialRampToValueAtTime(.035,now+.015);
+ gearGain.gain.exponentialRampToValueAtTime(.0001,now+.11);
+ audioRpm=Math.max(700,audioRpm-(newG>oldG?135:85));
 }
 function updateGear(){
  const k=Math.abs(state.speed)*3.6;let g=state.reverse?0:1;
@@ -391,15 +419,21 @@ function updateGear(){
 function updateReverseAlarm(dt){
  if(!audioCtx||!reverseGain)return;
  if(!state.reverse||Math.abs(state.speed)<.08){reverseGain.gain.setTargetAtTime(.0001,audioCtx.currentTime,.025);return;}
- reverseAlarmClock+=dt;const on=(reverseAlarmClock%0.95)<0.34;
- reverseGain.gain.setTargetAtTime(on?.028:.0001,audioCtx.currentTime,.012);
- reverseOsc.frequency.setTargetAtTime(930+Math.min(Math.abs(state.speed)*3,70),audioCtx.currentTime,.02);
+ reverseAlarmClock+=dt;
+ const phase=reverseAlarmClock%1.02;
+ const on=phase<0.30; // tiiitt ..... tiiitt
+ reverseGain.gain.setTargetAtTime(on?.032:.0001,audioCtx.currentTime,.010);
+ reverseOsc.frequency.setTargetAtTime(930+Math.min(Math.abs(state.speed)*2.5,55),audioCtx.currentTime,.018);
 }
 function updateAudio(dt){
  if(!audioCtx)return;if(audioCtx.state==="suspended")audioCtx.resume();updateGear();
  const k=Math.abs(state.speed)*3.6;
- const target=state.reverse?Math.min(1800,700+k*30+(state.gas?340:0)):Math.min(2100,700+k*(state.gear===1?38:25)+(state.gas?560:0));
- audioRpm+=(target-audioRpm)*(1-Math.exp(-4.2*dt));const now=audioCtx.currentTime;const pulse=Math.max(22,audioRpm/24);
+ const gearLoad=state.reverse ? 1.0 : (1.12-Math.min(Math.max(state.gear-1,0),5)*.075);
+ const target=state.reverse
+   ? Math.min(1950,720+k*42+(state.gas?680:0))
+   : Math.min(2200,700+k*(state.gear===1?42:29)*gearLoad+(state.gas?680:0));
+ audioRpm+=(target-audioRpm)*(1-Math.exp(-4.8*dt));
+ const now=audioCtx.currentTime;const pulse=Math.max(20,audioRpm/25);
  dieselLow.frequency.setTargetAtTime(pulse,now,.09);dieselMid.frequency.setTargetAtTime(pulse*1.4,now,.08);dieselHigh.frequency.setTargetAtTime(pulse*2.1,now,.08);
  engineFilter.frequency.setTargetAtTime(Math.min(760,255+(audioRpm-700)*.24+(state.gas?65:0)),now,.16);
  const load=Math.min(1,audioRpm/1900),level=.022+load*.016+(state.gas?.050:0)+Math.min(k/35,.35)*.016;engineGain.gain.setTargetAtTime(level,now,.13);
@@ -468,8 +502,6 @@ function update(dt){
    const phase=clamp(state.dumpT/4.2,0,1);
    const up=phase<.55?phase/.55:(1-phase)/.45;
    dumpPivot.rotation.x=-THREE.MathUtils.degToRad(42)*up;
-   $("dumpState").style.display="block";
-   $("dumpState").textContent=up>.05?"DUMP BODY • RAISING":"DUMP BODY • LOWERED";
    if(phase>=1)state.dumping=false;
  } else {
    dumpPivot.rotation.x=lerp(dumpPivot.rotation.x,0,.08);
@@ -486,20 +518,23 @@ function update(dt){
 
  const heading=truck.rotation.y+state.camYaw;
  const horiz=Math.cos(state.camPitch)*state.camDist;
- const camY=truck.position.y+7.2+Math.sin(state.camPitch)*state.camDist;
+ const camY=truck.position.y+6.8+Math.sin(state.camPitch)*state.camDist;
  const desired=new THREE.Vector3(
    truck.position.x-Math.sin(heading)*horiz,
    camY,
    truck.position.z-Math.cos(heading)*horiz
  );
- camera.position.lerp(desired,.12);
- const look=truck.position.clone().add(new THREE.Vector3(Math.sin(truck.rotation.y),1.0,Math.cos(truck.rotation.y)).multiplyScalar(4.5));
- look.y+=1.0;
+ camera.position.lerp(desired,.16);
+
+ // Keep the truck itself in frame. The old camera looked too far ahead,
+ // which made the truck mysteriously vanish while the road remained.
+ const look=truck.position.clone();
+ look.y+=2.6;
  camera.lookAt(look);
 
  $("speedN").textContent=Math.round(state.speed*3.6);
- const rpm=clamp((700+state.speed*38+(gas?520:0)),700,2200);
- $("rpmFill").style.width=clamp((rpm-700)/1500*100,0,100)+"%";
+ const displayRpm=clamp(audioRpm,700,2200);
+ $("rpmFill").style.width=clamp((displayRpm-700)/1500*100,0,100)+"%";
  updateAudio(dt);
 }
 
@@ -512,7 +547,10 @@ function animate(){
 animate();
 
 addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ viewW=Math.max(innerWidth,innerHeight);
+ viewH=Math.min(innerWidth,innerHeight);
+ camera.aspect=viewW/viewH;
+ camera.updateProjectionMatrix();
  renderer.setSize(viewW,viewH,false);
 });
 })();
