@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101214">
+<title>NUEL Simulator • DT030-0204</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101214;color:#fff;font-family:system-ui,sans-serif;touch-action:none}
+#game{position:fixed;inset:0;width:100%;height:100%}
+#hud{position:fixed;top:10px;left:0;right:0;z-index:5;display:flex;justify-content:space-between;padding:12px;pointer-events:none}
+.panel,#message{background:#080a0ccc;border:1px solid #ffffff25;border-radius:14px;padding:9px 12px;backdrop-filter:blur(7px)}
+.title{font-weight:800;font-size:15px}.sub{font-size:10px;opacity:.7}
+#speed{font-size:24px;font-weight:800;text-align:right}.unit{font-size:10px;opacity:.7}
+#message{position:fixed;z-index:6;top:17%;left:50%;transform:translateX(-50%);font-size:12px;white-space:nowrap}
+#controls{position:fixed;z-index:7;left:0;right:0;bottom:14px;display:flex;justify-content:space-between;padding:0 12px}
+.group{display:flex;gap:8px}
+button{border:1px solid #ffffff30;background:#11161ddd;color:#fff;border-radius:15px;min-width:62px;height:58px;font-weight:800;touch-action:none}
+.drive{height:70px;min-width:70px}.dump{background:#263b24dd}.reset{background:#342525dd}
+#loading{position:fixed;inset:0;z-index:20;background:#101214;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:800;letter-spacing:1px}
+#loading small{margin-top:9px;opacity:.55;font-weight:500}
+</style>
+</head>
+<body>
+<div id="loading">NUEL SIMULATOR<small>VOLVO FMX 440 • TRINTON 8×4 • DT030-0204</small></div>
+<canvas id="game"></canvas>
+<div id="hud"><div class="panel"><div class="title">NUEL SIMULATOR</div><div class="sub">DT030-0204 • HAUL ROAD</div></div><div class="panel"><div id="speed">0</div><div class="unit">KM/H</div></div></div>
+<div id="message">Loading...</div>
+<div id="controls">
+<div class="group"><button id="left">◀</button><button id="right">▶</button></div>
+<div class="group"><button id="brake">▼ REM</button><button id="gas" class="drive">GAS</button></div>
+<div class="group"><button id="dump" class="dump">DUMP</button><button id="reset" class="reset">RESET</button></div>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const canvas=document.querySelector("#game"),speedEl=document.querySelector("#speed"),msg=document.querySelector("#message");
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8fa9a7);
+scene.fog=new THREE.Fog(0x8fa9a7,90,520);
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,1000);
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:"high-performance"});
+renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;
+scene.add(new THREE.HemisphereLight(0xc7d8d5,0x354039,1.8));
+const sun=new THREE.DirectionalLight(0xfff0cf,2.4);sun.position.set(100,150,70);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+
+const M={
+ground:new THREE.MeshStandardMaterial({color:0x3f463f,roughness:1}),
+road:new THREE.MeshStandardMaterial({color:0x5c5b55,roughness:1}),
+gravel:new THREE.MeshStandardMaterial({color:0x77756d,roughness:1}),
+white:new THREE.MeshStandardMaterial({color:0xe5e7e6,roughness:.55}),
+black:new THREE.MeshStandardMaterial({color:0x111417,roughness:.75}),
+blue:new THREE.MeshStandardMaterial({color:0x174f82,roughness:.55}),
+yellow:new THREE.MeshStandardMaterial({color:0xf2c400,roughness:.5}),
+metal:new THREE.MeshStandardMaterial({color:0x666b6d,roughness:.35,metalness:.65}),
+glass:new THREE.MeshStandardMaterial({color:0x172b34,roughness:.2,metalness:.15}),
+tree:new THREE.MeshStandardMaterial({color:0x1d4022,roughness:1}),
+trunk:new THREE.MeshStandardMaterial({color:0x493321,roughness:1})
+};
+function box(p,x,y,z,w,h,d,m){const q=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);q.position.set(x,y,z);q.castShadow=true;q.receiveShadow=true;p.add(q);return q}
+function cyl(p,x,y,z,r,h,m){const q=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16),m);q.position.set(x,y,z);q.rotation.x=Math.PI/2;q.castShadow=true;p.add(q);return q}
+
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),M.ground);ground.rotation.x=-Math.PI/2;ground.position.y=-.3;ground.receiveShadow=true;scene.add(ground);
+
+// Broad winding, undulating mine road.
+const N=100,pts=[];
+for(let i=0;i<N;i++)pts.push(new THREE.Vector3(
+Math.sin(i*.22)*18+Math.sin(i*.065)*30,
+.8+Math.sin(i*.18)*1.7+Math.sin(i*.055)*2.8,
+60-i*10));
+function makeRoad(width){
+ const v=[],ix=[];
+ for(let i=0;i<N;i++){let p=pts[i],a=pts[Math.max(0,i-1)],b=pts[Math.min(N-1,i+1)],dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz)||1,nx=-dz/l,nz=dx/l;
+ v.push(p.x+nx*width/2,p.y,p.z+nz*width/2,p.x-nx*width/2,p.y,p.z-nz*width/2);
+ if(i<N-1){let k=i*2;ix.push(k,k+1,k+2,k+1,k+3,k+2)}}
+ const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(v,3));g.setIndex(ix);g.computeVertexNormals();
+ const q=new THREE.Mesh(g,M.road);q.receiveShadow=true;scene.add(q);
+}
+makeRoad(21);
+
+function tree(x,z,s=1){
+ const g=new THREE.Group();g.position.set(x,0,z);cyl(g,0,3*s,0,.32*s,6*s,M.trunk);
+ for(let i=0;i<4;i++){const q=new THREE.Mesh(new THREE.ConeGeometry((2.5-i*.35)*s,(3.8-i*.25)*s,8),M.tree);q.position.y=(6+i*1.25)*s;q.castShadow=true;g.add(q)}scene.add(g)
+}
+for(let i=1;i<N;i+=2){let p=pts[i];tree(p.x-12-Math.random()*10,p.z+(Math.random()-.5)*8,.7+Math.random()*.7);tree(p.x+12+Math.random()*10,p.z+(Math.random()-.5)*8,.7+Math.random()*.7)}
+for(let i=0;i<24;i++){let s=i%2?1:-1,q=new THREE.Mesh(new THREE.ConeGeometry(1,1,7),new THREE.MeshStandardMaterial({color:0x46553f,roughness:1}));q.scale.set(35+Math.random()*25,22+Math.random()*20,35+Math.random()*25);q.position.set(s*(55+Math.random()*30),q.scale.y/2-1,30-i*42);q.castShadow=true;scene.add(q)}
+
+// Disposal
+const disposal=new THREE.Group();disposal.position.copy(pts[N-1]);scene.add(disposal);
+box(disposal,0,-.1,0,40,.4,30,M.gravel);box(disposal,0,.35,-10,35,.7,1.4,M.yellow);
+for(let x=-16;x<=16;x+=8)box(disposal,x,1,-4,1.2,2,18,M.black);
+
+// Truck
+const truck=new THREE.Group();scene.add(truck);
+box(truck,0,2.2,0,3.35,.55,10.6,M.black);
+box(truck,0,2.65,-1.8,3.15,.35,5,M.metal);
+const cab=new THREE.Group();cab.position.set(0,3.1,3.05);truck.add(cab);
+box(cab,0,1.8,0,3.35,3.2,3.9,M.white);
+box(cab,0,2.7,-2.01,3.15,1.55,.16,M.glass);
+box(cab,-1.61,2.7,-.2,.16,1.45,2.8,M.glass);box(cab,1.61,2.7,-.2,.16,1.45,2.8,M.glass);
+box(cab,0,.35,-2.05,3.4,.65,.5,M.black);box(cab,0,.72,-2.2,2.9,.55,.18,M.blue);box(cab,0,.72,-2.31,2.2,.2,.12,M.yellow);
+box(cab,0,1.55,-2.28,2.25,1,.18,M.black);
+for(let y=1.15;y<=1.9;y+=.22)box(cab,0,y,-2.39,1.8,.06,.05,M.metal);
+for(const x of [-2.05,2.05]){box(cab,x,2.65,-1.35,.5,.18,.85,M.black);cyl(cab,x,2.65,-1.35,.28,.08,M.glass)}
+for(const x of [-1.05,1.05]){const h=new THREE.Mesh(new THREE.BoxGeometry(.62,.36,.08),new THREE.MeshStandardMaterial({color:0xffffd6,emissive:0x554400,emissiveIntensity:1.5}));h.position.set(x,.95,-2.42);cab.add(h)}
+
+const dump=new THREE.Group();dump.position.set(0,4.45,-2.35);truck.add(dump);
+box(dump,0,0,0,3.35,2.25,5.9,M.white);
+for(const x of [-1.52,1.52])for(let z=-2.3;z<=2.3;z+=1.15)box(dump,x,0,z,.12,2,.12,M.black);
+box(dump,0,.45,-3.02,2.5,.5,.16,M.blue);box(dump,0,.45,-3.12,1.9,.16,.12,M.yellow);
+box(dump,0,.05,-3.17,1.7,.9,.05,M.blue);
+box(truck,-2.05,2.45,.2,.7,1,3,M.metal);box(truck,2.05,2.45,.2,.7,1,3,M.metal);
+
+const wheels=[],axles=[3.15,.85,-2,-4.55];
+function wheel(x,z){const g=new THREE.Group();g.position.set(x,1.45,z);const t=new THREE.Mesh(new THREE.CylinderGeometry(.72,.72,.42,20),M.black);t.rotation.z=Math.PI/2;t.castShadow=true;g.add(t);const h=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.46,16),M.metal);h.rotation.z=Math.PI/2;g.add(h);truck.add(g);wheels.push(g)}
+wheel(-1.75,axles[0]);wheel(1.75,axles[0]);wheel(-1.75,axles[1]);wheel(1.75,axles[1]);
+for(const z of [axles[2],axles[3]]){wheel(-1.95,z);wheel(-1.45,z);wheel(1.45,z);wheel(1.95,z)}
+
+let route=0,speed=0,heading=0,steer=0,dumping=false;
+const key={gas:false,brake:false,left:false,right:false};
+function bind(id,k){const b=document.getElementById(id);const d=e=>{e.preventDefault();key[k]=true};const u=e=>{e.preventDefault();key[k]=false};b.addEventListener("pointerdown",d);["pointerup","pointercancel","pointerleave"].forEach(x=>b.addEventListener(x,u))}
+bind("gas","gas");bind("brake","brake");bind("left","left");bind("right","right");
+
+document.getElementById("dump").onpointerdown=e=>{e.preventDefault();if(route>N-12&&speed<2){dumping=!dumping;msg.textContent=dumping?"DUMP BODY NAIK":"DUMP BODY TURUN"}else msg.textContent="Berhenti di disposal dulu"};
+document.getElementById("reset").onpointerdown=e=>{e.preventDefault();truck.position.copy(pts[0]);truck.position.y+=.15;route=0;speed=0;heading=0;dumping=false;msg.textContent="Loading area"};
+
+let drag=false,lx=0,ly=0,yaw=.45,pitch=.22;
+canvas.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY};
+window.onpointerup=()=>drag=false;
+window.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-lx)*.006;pitch-=(e.clientY-ly)*.004;pitch=Math.max(-.15,Math.min(.8,pitch));lx=e.clientX;ly=e.clientY};
+
+function nearest(p){let bi=0,bd=1e9;for(let i=0;i<N;i++){let d=p.distanceTo(pts[i]);if(d<bd){bd=d;bi=i}}return {i:bi,d:bd}}
+function update(dt){
+ speed+=key.gas?3.8*dt:-1*dt;if(key.brake)speed-=7*dt;speed*=Math.pow(.985,dt*60);speed=Math.max(0,Math.min(10.5,speed));
+ if(key.left)steer+=2.1*dt;else if(key.right)steer-=2.1*dt;else steer*=Math.pow(.08,dt);
+ heading+=steer*speed*.055*dt;
+ const f=new THREE.Vector3(Math.sin(heading),0,Math.cos(heading));truck.position.addScaledVector(f,speed*dt);
+ const n=nearest(truck.position);route=n.i;const target=pts[Math.min(N-1,route+2)];
+ const ra=Math.atan2(target.x-truck.position.x,target.z-truck.position.z),diff=Math.atan2(Math.sin(ra-heading),Math.cos(ra-heading));heading+=diff*Math.min(1,dt*1.25);
+ if(n.d>8){truck.position.x=THREE.MathUtils.lerp(truck.position.x,pts[route].x,.035);truck.position.z=THREE.MathUtils.lerp(truck.position.z,pts[route].z,.035)}
+ truck.position.y=THREE.MathUtils.lerp(truck.position.y,pts[route].y+.15,.15);truck.rotation.y=heading;
+ dump.rotation.x=THREE.MathUtils.lerp(dump.rotation.x,dumping?-.38:0,dt*3);
+ wheels.forEach(w=>w.rotation.z+=speed*dt*1.8);
+ speedEl.textContent=Math.round(speed*3.6);
+ msg.textContent=route>N-14?"DISPOSAL • STOP + DUMP":"Hauling • ikuti jalan tambang";
+}
+function cam(){const t=truck.position.clone();t.y+=2.3;const r=13,cp=Math.cos(pitch);camera.position.set(t.x+Math.sin(yaw)*cp*r,t.y+Math.sin(pitch)*r,t.z+Math.cos(yaw)*cp*r);camera.lookAt(t)}
+let last=performance.now();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;update(dt);cam();renderer.render(scene,camera)}
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+document.getElementById("loading").style.display="none";msg.textContent="Loading area • GAS untuk mulai";loop(performance.now());
+</script>
+</body>
+</html>
