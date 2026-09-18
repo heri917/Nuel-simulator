@@ -1,124 +1,823 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js";
 
-const canvas=document.querySelector("#game"), host=document.querySelector("#viewport");
-const speedEl=document.querySelector("#speed"),tripEl=document.querySelector("#trip"),statusEl=document.querySelector("#status");
-let scene,camera,renderer,truck,body,clock;
-let throttle=false,brake=false,steer=0,speed=0,distance=0,trip=0,disposed=false;
-const wheels=[],trees=[];
+const canvas = document.querySelector("#game");
+const speedEl = document.querySelector("#speed");
+const statusEl = document.querySelector("#status");
 
-const M={
- white:new THREE.MeshStandardMaterial({color:0xe7e6df,roughness:.7}),
- dark:new THREE.MeshStandardMaterial({color:0x202326,roughness:.85}),
- black:new THREE.MeshStandardMaterial({color:0x141617,roughness:1}),
- blue:new THREE.MeshStandardMaterial({color:0x2367a8,roughness:.7}),
- yellow:new THREE.MeshStandardMaterial({color:0xd7a51c,roughness:.7}),
- glass:new THREE.MeshStandardMaterial({color:0x263239,roughness:.25,metalness:.1}),
- metal:new THREE.MeshStandardMaterial({color:0x777975,metalness:.65,roughness:.35}),
- gravel:new THREE.MeshStandardMaterial({color:0x6f706b,roughness:1}),
- ground:new THREE.MeshStandardMaterial({color:0x5f6f54,roughness:1}),
- hill:new THREE.MeshStandardMaterial({color:0x4f6149,roughness:1}),
- bark:new THREE.MeshStandardMaterial({color:0x4e3c2c,roughness:1}),
- leaf:new THREE.MeshStandardMaterial({color:0x2e5035,roughness:1})
-};
-const box=(x,y,z,m)=>new THREE.Mesh(new THREE.BoxGeometry(x,y,z),m);
-const cyl=(r,h,m,seg=16)=>new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,seg),m);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ea4aa);
+scene.fog = new THREE.Fog(0x8ea4aa, 90, 360);
 
-function addDetail(parent,obj,p){obj.position.set(...p);obj.castShadow=true;obj.receiveShadow=true;parent.add(obj);return obj}
+const camera = new THREE.PerspectiveCamera(
+  58,
+  innerWidth / innerHeight,
+  0.1,
+  700
+);
 
-function makeTruck(){
- truck=new THREE.Group();
- const chassis=addDetail(truck,box(3.25,.5,6.4,M.dark),[0,1.15,0]);
- // front cab
- const cab=addDetail(truck,box(3.1,2.35,2.25,M.white),[0,2.55,2.05]);
- addDetail(cab,box(2.72,.75,.08,M.glass),[0,.25,-1.16]);
- addDetail(cab,box(.08,.82,1.45,M.glass),[-1.52,.25,-.15]);
- addDetail(cab,box(.08,.82,1.45,M.glass),[1.52,.25,-.15]);
- // grille and bumper
- addDetail(cab,box(2.25,.62,.12,M.dark),[0,-.45,-1.19]);
- addDetail(truck,box(3.3,.3,.55,M.metal),[0,1.25,3.18]);
- addDetail(truck,box(3.15,.18,5.7,M.blue),[0,1.55,-.1]);
- addDetail(truck,box(3.16,.1,5.72,M.yellow),[0,1.68,-.1]);
- // dump body, tilted slightly above chassis
- body=new THREE.Group(); body.position.set(0,2.15,-.85);
- const bin=box(3.02,1.8,3.75,M.white);bin.position.y=.15;bin.castShadow=true;body.add(bin);
- const bedFloor=box(3.1,.18,3.9,M.dark);bedFloor.position.y=-.78;body.add(bedFloor);
- const tail=box(3.0,1.7,.18,M.white);tail.position.set(0,.15,-1.95);body.add(tail);
- const side1=box(.16,1.55,3.65,M.white);side1.position.set(-1.52,.2,0);body.add(side1);
- const side2=box(.16,1.55,3.65,M.white);side2.position.set(1.52,.2,0);body.add(side2);
- body.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});truck.add(body);
- // mirrors, steps, lights
- [-1,1].forEach(s=>{
-   addDetail(truck,box(.16,.28,.7,M.dark),[s*1.72,2.55,2.5]);
-   addDetail(truck,box(.32,.18,.42,M.yellow),[s*1.58,1.72,3.38]);
-   addDetail(truck,box(.42,.22,.18,M.white),[s*1.18,2.12,3.2]);
- });
- // 4 axles / 8 wheels
- const wheelX=[-1.57,1.57], wheelZ=[-2.35,-.75,.85,2.05];
- wheelX.forEach(x=>wheelZ.forEach(z=>{
-   const w=cyl(.67,.48,M.black,20);w.rotation.z=Math.PI/2;w.position.set(x,.72,z);w.castShadow=true;truck.add(w);wheels.push(w);
-   const hub=cyl(.23,.5,M.metal,16);hub.rotation.z=Math.PI/2;hub.position.set(x,.72,z);truck.add(hub);
- }));
- // exhaust / tank / steps
- addDetail(truck,cyl(.12,1.5,M.metal,12),[1.38,1.85,-1.6]);
- addDetail(truck,box(.55,.7,1.9,M.metal),[-1.75,1.0,.1]);
- addDetail(truck,box(.6,.22,.65,M.dark),[1.58,1.2,2.0]);
- truck.position.set(0,.1,13);
- scene.add(truck);
-}
-
-function makeWorld(){
- const ground=new THREE.Mesh(new THREE.PlaneGeometry(220,320),M.ground);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
- const road=new THREE.Mesh(new THREE.PlaneGeometry(10,290,12,100),M.gravel);road.rotation.x=-Math.PI/2;road.position.y=.035;road.receiveShadow=true;scene.add(road);
- // gravel stones
- for(let i=0;i<900;i++){let s=.035+Math.random()*.08;let rock=cyl(s,s*.7,M.metal,6);rock.position.set((Math.random()-.5)*9.4,.09,-140+Math.random()*280);scene.add(rock)}
- // hills
- for(let i=0;i<14;i++){let h=new THREE.Mesh(new THREE.ConeGeometry(18+Math.random()*16,24+Math.random()*25,8),M.hill);h.position.set((i%2?-1:1)*(18+Math.random()*28),-2,-35-i*18);h.scale.x=1.6;h.receiveShadow=true;scene.add(h)}
- // disposal
- const d=box(22,.5,18,M.dark);d.position.set(0,.25,-118);d.receiveShadow=true;scene.add(d);
- // trees
- for(let i=0;i<130;i++){const g=new THREE.Group();const tr=cyl(.18,.9+Math.random(),M.bark,7);tr.position.y=.7;const crown=new THREE.Mesh(new THREE.ConeGeometry(1.5,4,7),M.leaf);crown.position.y=3;g.add(tr,crown);const side=i%2?-1:1;g.position.set(side*(7+Math.random()*28),0,-145+Math.random()*275);g.scale.setScalar(.55+Math.random()*1);g.userData.baseZ=g.position.z;trees.push(g);scene.add(g)}
- // drainage berms
- for(const side of [-1,1]){const berm=box(.55,.45,285,M.dark);berm.position.set(side*5.55,.18,0);scene.add(berm)}
-}
-
-function init(){
- scene=new THREE.Scene();scene.background=new THREE.Color(0x91a9b1);scene.fog=new THREE.Fog(0x91a9b1,65,190);
- camera=new THREE.PerspectiveCamera(62,1,.1,350);
- camera.position.set(0,6.4,18);camera.lookAt(0,1,0);
- renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:"high-performance"});
- renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
- scene.add(new THREE.HemisphereLight(0xdce6e5,0x46533e,2));
- const sun=new THREE.DirectionalLight(0xffffff,2.5);sun.position.set(-35,55,25);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
- makeWorld();makeTruck();clock=new THREE.Clock();resize();requestAnimationFrame(loop);
-}
-function resize(){const r=host.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}
-function reset(){speed=0;distance=0;disposed=false;truck.position.set(0,.1,13);truck.position.x=0;truck.rotation.set(0,0,0);body.rotation.set(0,0,0);document.querySelector("#dump").disabled=true;statusEl.textContent="Ikuti jalan kerikil menuju disposal."}
-function updateTruck(dt){
- let target=throttle?(brake?0:15):(brake?-8:0);speed+=(target-speed)*Math.min(1,dt*2.7);
- if(!throttle&&!brake&&Math.abs(speed)<.05)speed=0;
- distance+=speed*dt;truck.position.z=13-distance;truck.position.x+=(steer*3.1-truck.position.x)*dt*2.5;truck.rotation.y=steer*.06;
- wheels.forEach(w=>w.rotation.x-=speed*dt*1.8);
- const atDisposal=distance>112;
- if(atDisposal&&!disposed){document.querySelector("#dump").disabled=false;statusEl.textContent=speed>1?"Kurangi kecepatan sampai berhenti di disposal.":"Berhenti di disposal lalu tekan DUMP."}
- if(body.rotation.x!==0 && Math.abs(speed)<.1)body.rotation.x=0;
-}
-function loop(){
- requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.04);updateTruck(dt);
- // follow camera
- camera.position.x+=(truck.position.x*.42-camera.position.x)*dt*2;
- camera.position.z+=(truck.position.z+13-camera.position.z)*dt*2;
- camera.position.y=truck.position.y+5.8;camera.lookAt(truck.position.x,1.2,truck.position.z-8);
- speedEl.textContent=Math.round(Math.max(0,speed*5));tripEl.textContent=trip;
- renderer.render(scene,camera);
-}
-function hold(id,set){const b=document.querySelector(id);const d=e=>{e.preventDefault();set(true)},u=()=>set(false);b.addEventListener("pointerdown",d);["pointerup","pointercancel","pointerleave"].forEach(v=>b.addEventListener(v,u))}
-hold("#gas",v=>throttle=v);hold("#brake",v=>brake=v);hold("#left",v=>steer=v?-1:0);hold("#right",v=>steer=v?1:0);
-document.querySelector("#reset").addEventListener("click",reset);
-document.querySelector("#dump").addEventListener("click",()=>{
- if(document.querySelector("#dump").disabled||speed>1)return;
- body.rotation.x=-0.55;setTimeout(()=>body.rotation.x=0,1300);
- trip++;disposed=true;distance=0;truck.position.z=13;document.querySelector("#dump").disabled=true;
- statusEl.textContent="✓ Dumping selesai. Kembali ke loading point untuk rit berikutnya.";
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  powerPreference: "high-performance"
 });
-window.addEventListener("resize",resize);
-init();setTimeout(()=>{const l=document.querySelector("#loading");l.style.opacity=0;setTimeout(()=>l.remove(),350)},650);
+
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.shadowMap.enabled = true;
+
+scene.add(new THREE.HemisphereLight(0xd9eaff, 0x34442e, 2.4));
+
+const sun = new THREE.DirectionalLight(0xffffff, 3);
+sun.position.set(80, 130, 60);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+
+const M = {
+  ground: new THREE.MeshStandardMaterial({
+    color: 0x41483d,
+    roughness: 1
+  }),
+  road: new THREE.MeshStandardMaterial({
+    color: 0x62625c,
+    roughness: 1
+  }),
+  gravel: new THREE.MeshStandardMaterial({
+    color: 0x85837a,
+    roughness: 1
+  }),
+  white: new THREE.MeshStandardMaterial({
+    color: 0xe8e8e4,
+    roughness: 0.65
+  }),
+  black: new THREE.MeshStandardMaterial({
+    color: 0x111315,
+    roughness: 0.7
+  }),
+  blue: new THREE.MeshStandardMaterial({
+    color: 0x174f82,
+    roughness: 0.55
+  }),
+  yellow: new THREE.MeshStandardMaterial({
+    color: 0xf2c400,
+    roughness: 0.55
+  }),
+  glass: new THREE.MeshStandardMaterial({
+    color: 0x172932,
+    roughness: 0.2,
+    metalness: 0.15
+  }),
+  metal: new THREE.MeshStandardMaterial({
+    color: 0x777b79,
+    roughness: 0.35,
+    metalness: 0.55
+  }),
+  tree: new THREE.MeshStandardMaterial({
+    color: 0x1d4022,
+    roughness: 1
+  }),
+  trunk: new THREE.MeshStandardMaterial({
+    color: 0x493321,
+    roughness: 1
+  })
+};
+
+/* =========================
+   GROUND
+========================= */
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(800, 800),
+  M.ground
+);
+
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* =========================
+   HAUL ROAD
+========================= */
+
+const road = [];
+
+for (let i = 0; i < 260; i++) {
+  const z = 190 - i * 1.55;
+
+  const x =
+    Math.sin(i * 0.065) * 25 +
+    Math.sin(i * 0.018) * 28;
+
+  const y =
+    1 +
+    Math.sin(i * 0.035) * 4 +
+    Math.sin(i * 0.012) * 7;
+
+  road.push(new THREE.Vector3(x, y, z));
+}
+
+const ROAD_WIDTH = 11;
+
+for (let i = 0; i < road.length - 1; i++) {
+  const a = road[i];
+  const b = road[i + 1];
+
+  const dir = new THREE.Vector3()
+    .subVectors(b, a)
+    .normalize();
+
+  const side = new THREE.Vector3(
+    -dir.z,
+    0,
+    dir.x
+  ).normalize();
+
+  const v = [
+    a.clone().addScaledVector(side, ROAD_WIDTH / 2),
+    a.clone().addScaledVector(side, -ROAD_WIDTH / 2),
+    b.clone().addScaledVector(side, -ROAD_WIDTH / 2),
+    b.clone().addScaledVector(side, ROAD_WIDTH / 2)
+  ];
+
+  const g = new THREE.BufferGeometry();
+
+  g.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(
+      v.flatMap(p => [p.x, p.y, p.z]),
+      3
+    )
+  );
+
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  g.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(g, M.road);
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+}
+
+/* =========================
+   GRAVEL
+========================= */
+
+for (let i = 0; i < 900; i++) {
+  const p = road[
+    Math.floor(Math.random() * road.length)
+  ];
+
+  const stone = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(
+      0.04 + Math.random() * 0.12,
+      0
+    ),
+    M.gravel
+  );
+
+  stone.position.set(
+    p.x + (Math.random() - 0.5) * 10,
+    p.y + 0.05,
+    p.z + (Math.random() - 0.5) * 10
+  );
+
+  scene.add(stone);
+}
+
+/* =========================
+   TREES
+========================= */
+
+function makeTree(x, y, z, scale) {
+  const g = new THREE.Group();
+
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.28, 2.8, 7),
+    M.trunk
+  );
+
+  trunk.position.y = 1.4;
+  trunk.castShadow = true;
+  g.add(trunk);
+
+  for (let i = 0; i < 3; i++) {
+    const crown = new THREE.Mesh(
+      new THREE.ConeGeometry(
+        2.2 - i * 0.35,
+        3.2,
+        8
+      ),
+      M.tree
+    );
+
+    crown.position.y = 3 + i * 1.15;
+    crown.castShadow = true;
+    g.add(crown);
+  }
+
+  g.position.set(x, y, z);
+  g.scale.setScalar(scale);
+
+  scene.add(g);
+}
+
+for (let i = 0; i < 420; i++) {
+  const p =
+    road[Math.floor(Math.random() * road.length)];
+
+  const side =
+    Math.random() < 0.5 ? -1 : 1;
+
+  makeTree(
+    p.x +
+      side *
+        (10 + Math.random() * 32),
+    p.y,
+    p.z + (Math.random() - 0.5) * 22,
+    0.7 + Math.random() * 1.1
+  );
+}
+
+/* =========================
+   HILLS
+========================= */
+
+for (let i = 0; i < 75; i++) {
+  const p =
+    road[Math.floor(Math.random() * road.length)];
+
+  const hill = new THREE.Mesh(
+    new THREE.ConeGeometry(
+      13 + Math.random() * 18,
+      20 + Math.random() * 35,
+      8
+    ),
+    M.tree
+  );
+
+  const side =
+    Math.random() < 0.5 ? -1 : 1;
+
+  hill.position.set(
+    p.x + side * (25 + Math.random() * 35),
+    7,
+    p.z + (Math.random() - 0.5) * 30
+  );
+
+  hill.scale.y = 1.2;
+  hill.receiveShadow = true;
+  hill.castShadow = true;
+
+  scene.add(hill);
+}
+
+/* =========================
+   TRUCK
+   VOLVO FMX 440
+   8x4
+========================= */
+
+const truck = new THREE.Group();
+scene.add(truck);
+
+function box(w, h, d, mat, x, y, z) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    mat
+  );
+
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+
+  truck.add(m);
+  return m;
+}
+
+/* chassis */
+
+box(3.25, 0.42, 8.4, M.black, 0, 2.0, 0);
+
+/* front bumper */
+
+box(3.45, 0.45, 0.75, M.black, 0, 2.05, 2.9);
+
+/* cab lower */
+
+box(3.3, 0.65, 3.2, M.black, 0, 2.45, 2.65);
+
+/* cab */
+
+box(3.1, 2.65, 3.05, M.white, 0, 3.75, 2.45);
+
+/* windshield */
+
+box(2.55, 1.2, 0.08, M.glass, 0, 4.25, 0.91);
+
+/* front grille */
+
+box(2.15, 0.95, 0.1, M.black, 0, 3.15, 0.9);
+
+/* grille bars */
+
+for (let i = -2; i <= 2; i++) {
+  box(
+    0.08,
+    0.75,
+    0.05,
+    M.metal,
+    i * 0.38,
+    3.15,
+    0.83
+  );
+}
+
+/* headlights */
+
+box(0.5, 0.32, 0.08, M.yellow, -1.05, 2.85, 0.84);
+box(0.5, 0.32, 0.08, M.yellow, 1.05, 2.85, 0.84);
+
+/* blue / yellow livery */
+
+box(3.15, 0.25, 1.9, M.blue, 0, 3.05, 2.65);
+box(3.17, 0.13, 1.9, M.yellow, 0, 3.31, 2.65);
+
+/* mirrors */
+
+box(0.35, 0.7, 0.7, M.black, -1.82, 4.15, 1.7);
+box(0.35, 0.7, 0.7, M.black, 1.82, 4.15, 1.7);
+
+/* steps */
+
+box(0.48, 0.24, 0.9, M.black, -1.7, 2.55, 1.55);
+box(0.48, 0.24, 0.9, M.black, 1.7, 2.55, 1.55);
+
+/* fuel tank */
+
+const tank = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.56, 0.56, 2.4, 16),
+  M.metal
+);
+
+tank.rotation.z = Math.PI / 2;
+tank.position.set(-1.82, 1.8, -0.9);
+tank.castShadow = true;
+truck.add(tank);
+
+/* =========================
+   DUMP BODY
+========================= */
+
+const dump = new THREE.Group();
+
+dump.position.set(0, 3.75, -1.8);
+truck.add(dump);
+
+const dumpBody = new THREE.Mesh(
+  new THREE.BoxGeometry(3.05, 2.25, 5.05),
+  M.white
+);
+
+dumpBody.position.y = 0.55;
+dumpBody.castShadow = true;
+dump.add(dumpBody);
+
+/* dump floor */
+
+const dumpFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(3.2, 0.18, 5.2),
+  M.black
+);
+
+dumpFloor.position.y = -0.6;
+dump.add(dumpFloor);
+
+/* upper rim */
+
+const rim = new THREE.Mesh(
+  new THREE.BoxGeometry(3.25, 0.18, 5.2),
+  M.black
+);
+
+rim.position.y = 1.75;
+dump.add(rim);
+
+/* dump side reinforcement */
+
+for (let z = -2; z <= 2; z += 1) {
+  box(
+    0.14,
+    1.8,
+    0.12,
+    M.black,
+    -1.56,
+    4.05,
+    z - 1.8
+  );
+
+  box(
+    0.14,
+    1.8,
+    0.12,
+    M.black,
+    1.56,
+    4.05,
+    z - 1.8
+  );
+}
+
+/* rear hazard stripes */
+
+for (let i = -1; i <= 1; i++) {
+  const stripe = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38, 1.1, 0.08),
+    M.yellow
+  );
+
+  stripe.position.set(
+    i * 0.7,
+    3.9,
+    -4.45
+  );
+
+  stripe.rotation.z = -0.45;
+  truck.add(stripe);
+}
+
+/* hydraulic cylinder */
+
+const hydraulic = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.12, 0.12, 2.5, 10),
+  M.metal
+);
+
+hydraulic.position.set(0, 3.05, -1.1);
+hydraulic.rotation.z = 0.3;
+truck.add(hydraulic);
+
+/* =========================
+   WHEELS
+   AXLE 1 = 2
+   AXLE 2 = 2
+   AXLE 3 = 4
+   AXLE 4 = 4
+   TOTAL = 12 TYRES
+========================= */
+
+const tyres = [];
+
+function tyre(x, z, offset = 0) {
+  const t = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      0.67,
+      0.67,
+      0.42,
+      20
+    ),
+    M.black
+  );
+
+  t.rotation.z = Math.PI / 2;
+
+  t.position.set(
+    x + offset,
+    1.25,
+    z
+  );
+
+  t.castShadow = true;
+  truck.add(t);
+  tyres.push(t);
+}
+
+/* AXLE 1 */
+
+tyre(-1.72, 2.15);
+tyre(1.72, 2.15);
+
+/* AXLE 2 */
+
+tyre(-1.72, 0.65);
+tyre(1.72, 0.65);
+
+/* AXLE 3 DUAL */
+
+tyre(-1.72, -1.05, -0.24);
+tyre(-1.72, -1.05, 0.24);
+tyre(1.72, -1.05, -0.24);
+tyre(1.72, -1.05, 0.24);
+
+/* AXLE 4 DUAL */
+
+tyre(-1.72, -2.65, -0.24);
+tyre(-1.72, -2.65, 0.24);
+tyre(1.72, -2.65, -0.24);
+tyre(1.72, -2.65, 0.24);
+
+/* =========================
+   TRUCK START
+========================= */
+
+let roadIndex = road.length - 5;
+
+truck.position.copy(road[roadIndex]);
+
+function alignTruck() {
+  const p = road[Math.floor(roadIndex)];
+  const n = road[Math.floor(roadIndex) - 1];
+
+  const dx = n.x - p.x;
+  const dz = n.z - p.z;
+
+  truck.rotation.y = Math.atan2(dx, dz);
+}
+
+alignTruck();
+
+/* =========================
+   CONTROLS
+========================= */
+
+let gas = false;
+let brake = false;
+let steer = 0;
+let dumping = false;
+
+function button(id, down, up) {
+  const el = document.querySelector("#" + id);
+
+  if (!el) return;
+
+  el.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    down();
+  });
+
+  el.addEventListener("pointerup", e => {
+    e.preventDefault();
+    up();
+  });
+
+  el.addEventListener("pointercancel", up);
+}
+
+button(
+  "gas",
+  () => gas = true,
+  () => gas = false
+);
+
+button(
+  "brake",
+  () => brake = true,
+  () => brake = false
+);
+
+button(
+  "left",
+  () => steer = -1,
+  () => steer = 0
+);
+
+button(
+  "right",
+  () => steer = 1,
+  () => steer = 0
+);
+
+const dumpButton =
+  document.querySelector("#dump");
+
+if (dumpButton) {
+  dumpButton.addEventListener(
+    "pointerdown",
+    e => {
+      e.preventDefault();
+      dumping = !dumping;
+    }
+  );
+}
+
+const resetButton =
+  document.querySelector("#reset");
+
+if (resetButton) {
+  resetButton.addEventListener(
+    "pointerdown",
+    e => {
+      e.preventDefault();
+
+      roadIndex = road.length - 5;
+      speed = 0;
+      dumping = false;
+
+      truck.position.copy(
+        road[Math.floor(roadIndex)]
+      );
+
+      alignTruck();
+    }
+  );
+}
+
+/* =========================
+   PHYSICS
+========================= */
+
+let speed = 0;
+
+function updateTruck(dt) {
+  if (gas) {
+    speed += 7.5 * dt;
+  } else {
+    speed -= 2.0 * dt;
+  }
+
+  if (brake) {
+    speed -= 14 * dt;
+  }
+
+  speed = THREE.MathUtils.clamp(
+    speed,
+    0,
+    15
+  );
+
+  if (speed > 0.05) {
+    roadIndex -=
+      speed * dt * 0.72;
+  }
+
+  roadIndex = THREE.MathUtils.clamp(
+    roadIndex,
+    2,
+    road.length - 2
+  );
+
+  const p =
+    road[Math.floor(roadIndex)];
+
+  truck.position.lerp(p, 0.2);
+
+  alignTruck();
+
+  truck.rotation.y +=
+    steer * dt * 0.22;
+
+  const targetDump =
+    dumping ? -0.58 : 0;
+
+  dump.rotation.x =
+    THREE.MathUtils.lerp(
+      dump.rotation.x,
+      targetDump,
+      dt * 3
+    );
+
+  tyres.forEach(t => {
+    t.rotation.x -= speed * dt * 2;
+  });
+
+  if (speedEl) {
+    speedEl.textContent =
+      Math.round(speed * 3.6) + " km/j";
+  }
+
+  if (statusEl) {
+    statusEl.textContent =
+      dumping
+        ? "Bak sedang dumping..."
+        : "DT030-0204 • Volvo FMX 440";
+  }
+}
+
+/* =========================
+   CAMERA 360°
+========================= */
+
+let yaw = Math.PI;
+let pitch = 0.38;
+let distance = 14;
+
+let dragging = false;
+let lastX = 0;
+let lastY = 0;
+
+canvas.addEventListener(
+  "pointerdown",
+  e => {
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }
+);
+
+canvas.addEventListener(
+  "pointermove",
+  e => {
+    if (!dragging) return;
+
+    const dx =
+      e.clientX - lastX;
+
+    const dy =
+      e.clientY - lastY;
+
+    yaw -= dx * 0.007;
+    pitch -= dy * 0.004;
+
+    pitch = THREE.MathUtils.clamp(
+      pitch,
+      0.12,
+      1.0
+    );
+
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }
+);
+
+canvas.addEventListener(
+  "pointerup",
+  () => dragging = false
+);
+
+canvas.addEventListener(
+  "pointercancel",
+  () => dragging = false
+);
+
+function updateCamera(dt) {
+  const target =
+    truck.position.clone();
+
+  target.y += 2.1;
+
+  const offset = new THREE.Vector3(
+    Math.sin(yaw) *
+      Math.cos(pitch) *
+      distance,
+
+    Math.sin(pitch) *
+      distance,
+
+    Math.cos(yaw) *
+      Math.cos(pitch) *
+      distance
+  );
+
+  const desired =
+    target.clone().add(offset);
+
+  camera.position.lerp(
+    desired,
+    1 - Math.pow(0.002, dt)
+  );
+
+  camera.lookAt(target);
+}
+
+/* =========================
+   RESIZE
+========================= */
+
+addEventListener(
+  "resize",
+  () => {
+    camera.aspect =
+      innerWidth / innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+      innerWidth,
+      innerHeight
+    );
+  }
+);
+
+/* =========================
+   LOOP
+========================= */
+
+const clock =
+  new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt =
+    Math.min(
+      clock.getDelta(),
+      0.05
+    );
+
+  updateTruck(dt);
+  updateCamera(dt);
+
+  renderer.render(
+    scene,
+    camera
+  );
+}
+
+animate();
