@@ -1,0 +1,45 @@
+
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090b0d;font-family:Arial,Helvetica,sans-serif;touch-action:none}
+button{font:inherit;color:inherit;border:0;outline:0;appearance:none;-webkit-appearance:none}
+#stage{position:fixed;left:0;top:0;width:100vw;height:100vh;overflow:hidden;background:#090b0d;transform-origin:top left;}
+@media (orientation:portrait){#stage{width:100vh;height:100vw;transform:rotate(90deg) translateY(-100%);}}
+#game{position:absolute;inset:0;background:#0b0d0f}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#loading{position:absolute;inset:0;z-index:80;display:grid;place-items:center;background:
+ radial-gradient(circle at 50% 38%,#252a2d 0,#111417 38%,#080a0c 78%);
+ transition:opacity .55s ease,visibility .55s ease}
+#loading.hide{opacity:0;visibility:hidden;pointer-events:none}
+.loadWrap{width:min(820px,82vw);text-align:center}
+.loadLogo{width:min(460px,48vw);max-height:34vh;height:auto;aspect-ratio:auto;object-fit:contain;border-radius:18px;display:block;margin:0 auto 22px;box-shadow:0 18px 70px rgba(0,0,0,.65),0 0 0 2px rgba(255,198,30,.25)}
+.loaderTrack{position:relative;height:34px;border:2px solid #34393d;border-radius:18px;background:#111416;overflow:hidden;box-shadow:inset 0 0 18px rgba(0,0,0,.7)}
+.loaderFill{position:absolute;left:0;top:0;height:100%;width:0;background:repeating-linear-gradient(135deg,#f6c21a 0 16px,#111416 16px 28px);transition:width .12s linear}
+.tire{position:absolute;top:50%;left:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:radial-gradient(circle,#777 0 16%,#222 17% 36%,#0a0a0a 37% 66%,#555 67% 72%,#0b0b0b 73%);border:2px solid #0a0a0a;box-shadow:0 4px 10px rgba(0,0,0,.65);z-index:3}
+.tire:after{content:"";position:absolute;inset:5px;border-radius:50%;border:2px dashed #777}
+.loadPct{margin-top:11px;font-size:18px;font-weight:900;color:#f6c21a;letter-spacing:2px}
+#hud{position:absolute;inset:0;z-index:20;pointer-events:none}
+.panel{position:absolute;background:rgba(9,11,13,.78);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 35px rgba(0,0,0,.25);backdrop-filter:blur(8px);border-radius:17px}
+#speed{right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));padding:11px 18px;text-align:right;min-width:108px}
+#speed .n{font-size:clamp(26px,4vw,43px);font-weight:900;line-height:.9}
+#speed .u{font-size:11px;color:#aeb4b8;letter-spacing:2px}
+#rpmBox{right:max(14px,env(safe-area-inset-right));top:94px;padding:9px 14px;min-width:150px}
+#rpmLabel{font-size:10px;color:#aeb4b8;letter-spacing:2px}
+#rpmBar{height:7px;margin-top:6px;border-radius:5px;background:#252a2e;overflow:hidden}
+#rpmFill{height:100%;width:0;background:linear-gradient(90deg,#9aa0a4,#f0c329,#e45b35)}
+#controls{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:max(15px,env(safe-area-inset-bottom));display:flex;align-items:end;gap:10px;pointer-events:auto}
+.ctrl{width:74px;height:74px;border-radius:20px;background:rgba(15,18,20,.88);border:1px solid rgba(255,255,255,.18);box-shadow:0 7px 18px rgba(0,0,0,.32);display:grid;place-items:center;font-weight:900;touch-action:none}
+.ctrl.gas{height:110px;background:rgba(42,36,14,.94);border-color:rgba(246,194,26,.5)}
+.ctrl.brake{height:92px}
+.ctrl.reverse{height:74px;background:rgba(35,38,43,.94);border-color:rgba(150,160,175,.42)}.ctrl.reverse.active{background:rgba(65,72,82,.96);border-color:rgba(255,255,255,.45)}.ctrl.dump{background:rgba(25,47,32,.94);border-color:rgba(126,183,135,.45)}
+.ctrl.reset{background:rgba(55,24,24,.94)}
+.ctrl .sym{font-size:29px;line-height:1}
+.ctrl small{font-size:11px;letter-spacing:1px}
+.ctrl.active{transform:scale(.97);filter:brightness(1.22)}
+#steer{position:absolute;left:max(155px,18vw);bottom:max(22px,env(safe-area-inset-bottom));width:170px;height:74px;display:flex;gap:10px;pointer-events:auto}
+.steer{flex:1;height:74px;border-radius:22px;background:rgba(15,18,20,.86);border:1px solid rgba(255,255,255,.17);font-size:31px;font-weight:900;touch-action:none}
+@media (max-width:760px){
+ .ctrl{width:65px;height:65px}.ctrl.gas{height:94px}.ctrl.brake{height:78px}.ctrl.dump,.ctrl.reset{height:65px}
+ #steer{left:145px;width:150px;height:65px}.steer{height:65px}
+ #rpmBox{top:83px}
+}
