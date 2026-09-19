@@ -66,7 +66,7 @@ const pts=[];
 for(let i=0;i<42;i++){
  const z=i*30-610;
  const x=Math.sin(i*.42)*34 + Math.sin(i*.17)*58;
- const y=10 + Math.sin(i*.27)*3.5 + Math.sin(i*.11)*2.5 + (i>24?(i-24)*.45:0);
+ const y=3.2 + Math.sin(i*.27)*1.5 + Math.sin(i*.11)*1.1 + (i>24?(i-24)*.18:0);
  pts.push(new THREE.Vector3(x,y,z));
 }
 const roadCurve=new THREE.CatmullRomCurve3(pts,false,"centripetal",.55);
@@ -127,11 +127,34 @@ for(const off of [-3.4,3.4]){
  const line=new THREE.Line(g,new THREE.LineBasicMaterial({color:0x302e2a,transparent:true,opacity:.55}));world.add(line);
 }
 
-// Terrain. Keep the haul road above the terrain so the ground never swallows the truck.
-function terrainHeight(x,z){
-  return -8 + Math.sin(x*.013)*3.5 + Math.cos(z*.017)*3.0 + Math.sin((x+z)*.008)*4.0;
+// Terrain conforms to the haul road instead of leaving a floating road ribbon.
+const terrainRoadSamples=[];
+for(let i=0;i<140;i++){
+  const t=i/139, rp=roadCurve.getPoint(t);
+  terrainRoadSamples.push({x:rp.x,z:rp.z,y:rp.y});
 }
-const terrainGeo=new THREE.PlaneGeometry(1400,1400,90,90);
+function terrainBase(x,z){
+  return 1.2 + Math.sin(x*.013)*1.8 + Math.cos(z*.017)*1.6 + Math.sin((x+z)*.008)*2.2;
+}
+function terrainHeight(x,z){
+  let bestD=Infinity,bestY=0;
+  for(const r of terrainRoadSamples){
+    const dx=x-r.x,dz=z-r.z,d=dx*dx+dz*dz;
+    if(d<bestD){bestD=d;bestY=r.y;}
+  }
+  const d=Math.sqrt(bestD), base=terrainBase(x,z);
+  if(d<9){
+    const edge=Math.max(0,Math.min(1,(d-5.5)/3.5));
+    return bestY-.45-edge*1.2;
+  }
+  if(d<42){
+    const blend=(d-9)/33;
+    const shoulder=bestY-1.6-(d-9)*.035;
+    return shoulder*(1-blend)+base*blend;
+  }
+  return base;
+}
+const terrainGeo=new THREE.PlaneGeometry(1400,1400,110,110);
 const pos=terrainGeo.attributes.position;
 for(let i=0;i<pos.count;i++){
  const x=pos.getX(i), z=pos.getY(i);
@@ -309,7 +332,7 @@ truck.rotation.y=Math.atan2(startTan.x,startTan.z);
 let baseHeading=truck.rotation.y;
 
 const state={speed:0,steer:0,gas:false,brake:false,reverse:false,dumping:false,gear:1,dumpT:0,roll:0,camYaw:0,camPitch:0.22,camDist:25};
-let targetCamYaw=0,targetCamPitch=.34,targetCamDist=30;
+let targetCamYaw=0,targetCamPitch=.48,targetCamDist=28;
 let manualCameraUntil=0;
 let cameraGestureAxis=null;
 
@@ -374,7 +397,8 @@ renderer.domElement.addEventListener("pointermove",e=>{
    cameraGestureAxis=Math.abs(e.clientX-gestureStartX)>=Math.abs(e.clientY-gestureStartY)?"yaw":"pitch";
  }
  if(cameraGestureAxis==="yaw") targetCamYaw+=dx*.006;
- if(cameraGestureAxis==="pitch") targetCamPitch=clamp(targetCamPitch-dy*.004,-.05,.78);
+ if(cameraGestureAxis==="yaw") targetCamYaw=THREE.MathUtils.euclideanModulo(targetCamYaw+Math.PI,Math.PI*2)-Math.PI;
+ if(cameraGestureAxis==="pitch") targetCamPitch=clamp(targetCamPitch-dy*.004,.08,.72);
 });
 renderer.domElement.addEventListener("pointerup",e=>{if(camPointer===e.pointerId){camPointer=null;cameraGestureAxis=null;renderer.domElement.releasePointerCapture?.(e.pointerId)}});
 renderer.domElement.addEventListener("pointercancel",e=>{if(camPointer===e.pointerId){camPointer=null;cameraGestureAxis=null;renderer.domElement.releasePointerCapture?.(e.pointerId)}});
@@ -403,7 +427,7 @@ function resetTruck(){
  truck.rotation.y=Math.atan2(t.x,t.z);baseHeading=truck.rotation.y;
  state.speed=0;state.steer=0;state.roll=0;state.reverse=false;state.gear=1;state.dumping=false;state.dumpT=0;
  dumpPivot.rotation.x=0;
- targetCamYaw=0;targetCamPitch=.34;targetCamDist=30;manualCameraUntil=0;cameraGestureAxis=null;reverseBtn.classList.remove("active");
+ targetCamYaw=0;targetCamPitch=.48;targetCamDist=28;manualCameraUntil=0;cameraGestureAxis=null;reverseBtn.classList.remove("active");
 }
 
 function roadInfo(pos){
@@ -545,13 +569,13 @@ function update(dt){
  if(now>manualCameraUntil && camPointer===null){
    targetCamYaw=0;
  }
- state.camYaw=lerp(state.camYaw,targetCamYaw,.08);
- state.camPitch=lerp(state.camPitch,targetCamPitch,.08);
- state.camDist=lerp(state.camDist,targetCamDist,.08);
+ state.camYaw=lerp(state.camYaw,targetCamYaw,.16);
+ state.camPitch=lerp(state.camPitch,targetCamPitch,.16);
+ state.camDist=lerp(state.camDist,targetCamDist,.16);
 
  const heading=truck.rotation.y+state.camYaw;
  const horiz=Math.cos(state.camPitch)*state.camDist;
- const camY=truck.position.y+5.6+Math.sin(state.camPitch)*state.camDist;
+ const camY=truck.position.y+4.8+Math.sin(state.camPitch)*state.camDist;
  const desired=new THREE.Vector3(
    truck.position.x-Math.sin(heading)*horiz,
    camY,
@@ -563,7 +587,7 @@ function update(dt){
  // rotates the view around the truck instead of making it slide sideways.
  const viewForward=new THREE.Vector3(Math.sin(heading),0,Math.cos(heading));
  const look=truck.position.clone().add(viewForward.multiplyScalar(5.0));
- look.y+=1.25;
+ look.y+=1.8;
  camera.lookAt(look);
 
  $("speedN").textContent=Math.round(state.speed*3.6);
