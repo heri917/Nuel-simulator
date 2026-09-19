@@ -2,6 +2,18 @@
 (() => {
 "use strict";
 
+// Prefer native landscape locking when the installed PWA/browser supports it.
+// CSS rotation below remains the iOS Safari fallback.
+function requestLandscape(){
+  try{
+    if(screen.orientation && screen.orientation.lock){
+      const r=screen.orientation.lock("landscape");
+      if(r && r.catch) r.catch(()=>{});
+    }
+  }catch(e){}
+}
+requestLandscape();
+
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 const lerp = (a,b,t) => a+(b-a)*t;
