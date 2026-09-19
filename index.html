@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+<script>document.documentElement.classList.toggle("force-landscape", window.innerWidth < window.innerHeight); window.addEventListener("resize",()=>document.documentElement.classList.toggle("force-landscape", window.innerWidth < window.innerHeight), {passive:true});</script>
 <div id="stage">
 <div id="game"></div>
 
